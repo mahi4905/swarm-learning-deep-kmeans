@@ -107,9 +107,7 @@ No participant shares raw network logs during training.
 
 ## Cluster Setup
 
-The following image illustrates a Swarm Learning cluster setup:
 
-![NSL-KDD Cluster Setup](/docs/User/GUID-PLACEHOLDER.png)
 
 - One Sentinel Node (SN1) runs on host-1.
 - Five Swarm Learning nodes participate in collaborative training.
