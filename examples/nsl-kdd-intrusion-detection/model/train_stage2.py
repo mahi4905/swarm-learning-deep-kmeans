@@ -1,4 +1,3 @@
-#can be used individually to get benign vs malicious classification, but not for multi-class classification
 import os
 import logging
 import pickle
@@ -152,7 +151,7 @@ from tensorflow.keras import layers, Model
 in_dim  = X.shape[1]
 enc_dim = 64
 BS      = 256
-K       = 25
+K       = 15
 
 ei  = keras.Input(shape=(in_dim,))
 e   = layers.Dense(256)(ei);     e = layers.BatchNormalization()(e); e = layers.Activation('relu')(e); e = layers.Dropout(0.2)(e)
@@ -234,7 +233,7 @@ except Exception as ex:
     X_bal, y_bal = X, y_int
 
 
-print('\n' + '=' * 60 + '\nPHASE 2: DEEP K-MEANS (K=25)\n' + '=' * 60)
+print('\n' + '=' * 60 + '\nPHASE 2: DEEP K-MEANS (K=15)\n' + '=' * 60)
 embs = encoder.predict(X_bal, verbose=0)
 km   = KMeans(n_clusters=K, n_init=20, random_state=42).fit(embs)
 model.get_layer('clustering').set_weights([km.cluster_centers_])
@@ -287,8 +286,8 @@ cluster_map = {}
 for i in range(K):
     idx = np.where(final_preds == i)[0]
     if len(idx) > 0:
-        majority_label = Counter(y_str[idx]).most_common(1)[0][0]
-        cluster_map[i] = majority_label
+        majority_label  = Counter(y_str[idx]).most_common(1)[0][0]
+        cluster_map[i]  = majority_label
     else:
         cluster_map[i] = 'normal'
 
