@@ -149,7 +149,7 @@ from tensorflow import keras
 from tensorflow.keras import layers, Model
 
 in_dim  = X.shape[1]
-enc_dim = 64
+enc_dim = 32
 BS      = 256
 K       = 15
 
