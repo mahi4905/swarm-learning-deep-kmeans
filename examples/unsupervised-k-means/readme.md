@@ -1,281 +1,205 @@
-# Privacy-Preserving Swarm Learning for Network Intrusion Detection
+# NSL-KDD Binary Intrusion Detection
 
-This example demonstrates how a privacy-preserving Network Intrusion Detection System (NIDS) built using the NSL-KDD dataset can be trained and deployed on the HPE Swarm Learning platform.
+This example demonstrates how a binary network intrusion detection model — built over the [NSL-KDD dataset](https://www.unb.ca/cic/datasets/nsl.html) using a deep autoencoder with a Deep Embedded Clustering (K-Means) head — runs and performs on the Swarm Learning platform.
 
-The objective is to collaboratively detect cyberattacks across multiple organizations without sharing raw network traffic logs. The system uses a Two-Stage Hybrid Deep Learning Architecture consisting of binary attack detection followed by multi-class attack classification.
+The model classifies network traffic records into two classes, `normal` and `attack`, using unsupervised clustering in a learned embedding space rather than a directly supervised classifier.
 
-## Dataset Description
+To download the dataset, follow the steps below:
 
-This project uses the **NSL-KDD Dataset**, a benchmark dataset for network intrusion detection.
+Click on "Download" on the official dataset page — [NSL-KDD on the Canadian Institute for Cybersecurity site](https://www.unb.ca/cic/datasets/nsl.html) — or use a verified mirror of the original files.
 
-Dataset Information:
+After downloading, copy `KDDTrain+.txt` and `KDDTest+.txt` to the workspace data directory:
 
-https://www.unb.ca/cic/datasets/nsl.html
-
-The dataset contains network traffic records categorized into:
-
-- Normal
-- DoS (Denial of Service)
-- Probe
-- U2R (User-to-Root)
-- R2L (Remote-to-Local)
-
-The dataset files and non-IID node splits are stored in:
-
-```text
-nsl-kdd-intrusion-detection/app-data
+```
+cp /Downloads/KDDTrain+.txt /Downloads/KDDTest+.txt workspace/nsl-kdd-binary/data/
 ```
 
-## Data Preprocessing
+No file path needs to be edited in the training script — `train_binary.py` and `prepare_data.py` both read their input location from the `DATA_DIR` environment variable, which is set automatically by the launch commands in this README.
 
-Raw network traffic contains categorical values such as:
+The following describes the cluster setup for this example:
 
-- tcp
-- udp
-- http
-- ftp
-- SF
+- This example uses **one SN node**. `sn1` is the name of the Docker container, running on host `10.160.0.2`.
+- **Three SL and ML nodes** are manually spawned by running the `run-sl` script. Swarm training is invoked once the ML nodes are started. The SL containers are named `sl1`, `sl2`, `sl3`. The ML containers are named `ml1`, `ml2`, `ml3`.
+- All three SL/ML pairs run on the **same host**, `10.160.0.2` — this example simulates a 3-node swarm on a single GCP Compute Engine VM, rather than across separate physical hosts.
+- This example assumes the HPE AutoPass License Server (APLS) is already running on `10.160.0.2`. All Swarm nodes connect to the License Server on its default port, `5814`.
+- Each of the three nodes trains on a different, deliberately non-IID partition of `KDDTrain+.txt`:
+  - **Node 1** — normal-dominant (65% normal / 35% attack)
+  - **Node 2** — attack-dominant (65% attack / 35% normal)
+  - **Node 3** — balanced (50% / 50%)
 
-These values are transformed using a custom preprocessing pipeline.
+## Running the NSL-KDD Binary example
 
-The preprocessing stage:
+1. Navigate to the `swarm-learning` folder (that is, parent to the `examples` directory).
 
-- Applies One-Hot Encoding to categorical features
-- Applies Min-Max Scaling to continuous features
-- Generates normalized 122-dimensional feature vectors
-
-The preprocessing artifacts are stored in:
-
-```text
-data-prep/preprocessor.pkl
 ```
-
-## Non-IID Data Distribution
-
-To simulate real-world enterprise environments, the dataset is distributed across five Swarm Learning nodes.
-
-### Node 1 – Public Web Server
-
-Predominantly contains DoS traffic.
-
-### Node 2 – Internal Database Firewall
-
-Predominantly contains Probe traffic.
-
-### Nodes 3, 4 and 5 – Regional Routers
-
-Contain mixed traffic distributions.
-
-This setup reflects realistic deployments where organizations observe different attack patterns and traffic characteristics.
-
-## Model Architecture
-
-The intrusion detection framework consists of two stages.
-
-### Stage 1 – Binary Classification
-
-Classifies network traffic as:
-
-- Normal
-- Attack
-
-### Stage 2 – Multi-Class Classification
-
-Further classifies attacks into:
-
-- DoS
-- Probe
-- U2R
-- R2L
-
-The implementation uses:
-
-- TensorFlow / Keras
-- Deep K-Means Autoencoder
-- HPE Swarm Learning
-
-## Performance
-
-After Swarm Learning training across five distributed nodes:
-
-| Metric | Accuracy |
-|----------|----------|
-| Binary Classification | 86.6% |
-| Multi-Class Classification | 73.4% |
-
-No participant shares raw network logs during training.
-
-## Cluster Setup
-
-
-
-- One Sentinel Node (SN1) runs on host-1.
-- Five Swarm Learning nodes participate in collaborative training.
-- Each SL node launches an ML node as a sidecar container.
-- All nodes communicate through the Sentinel node.
-- The License Server runs on host-1 using the default port 5814.
-- Training is performed without sharing raw network traffic data.
-
-## Running the NSL-KDD Example
-
-### 1. Navigate to the Swarm Learning Directory
-
-On all participating hosts:
-
-```bash
 cd swarm-learning
 ```
 
-### 2. Create a Workspace
+2. Create the workspace directory structure.
 
-On all hosts:
-
-```bash
-mkdir workspace
-
-cp -r examples/nsl-kdd-intrusion-detection workspace/
-
-cp -r examples/utils/gen-cert \
-workspace/nsl-kdd-intrusion-detection/
+```
+mkdir -p workspace/nsl-kdd-binary/{model,data,ml-context}
+mkdir -p workspace/nsl-kdd-binary/hpe-swarm-sl1
+mkdir -p workspace/nsl-kdd-binary/hpe-swarm-sl2
+mkdir -p workspace/nsl-kdd-binary/hpe-swarm-sl3
+mkdir -p workspace/nsl-kdd-binary/saved_models/node1
+mkdir -p workspace/nsl-kdd-binary/saved_models/node2
+mkdir -p workspace/nsl-kdd-binary/saved_models/node3
 ```
 
-### 3. Generate Certificates
+3. Copy the `gen-cert` utility into the workspace and run it once per node index to generate certificates for each Swarm component, using `gen-cert -e <EXAMPLE-NAME> -i <HOST-INDEX>`:
 
-On host-1:
-
-```bash
-./workspace/nsl-kdd-intrusion-detection/gen-cert \
--e nsl-kdd-intrusion-detection -i 1
+```
+cp examples/utils/gen-cert workspace/nsl-kdd-binary/
+chmod +x workspace/nsl-kdd-binary/gen-cert
 ```
 
-On host-2:
-
-```bash
-./workspace/nsl-kdd-intrusion-detection/gen-cert \
--e nsl-kdd-intrusion-detection -i 2
+```
+./gen-cert -e nsl-kdd-binary -i 1
+./gen-cert -e nsl-kdd-binary -i 2
+./gen-cert -e nsl-kdd-binary -i 3
 ```
 
-Repeat for additional hosts if using more nodes.
+Since all three nodes run on the same host in this setup, there is no need to copy CA certificates between separate hosts — all generated certificates already share the same `workspace/nsl-kdd-binary/cert/` directory.
 
-### 4. Exchange CA Certificates
+4. Split the raw NSL-KDD training set into three non-IID partitions, one per node.
 
-On host-1:
-
-```bash
-scp host-2:workspace/nsl-kdd-intrusion-detection/cert/ca/capath/ca-2-cert.pem \
-workspace/nsl-kdd-intrusion-detection/cert/ca/capath
+```
+python3 workspace/nsl-kdd-binary/model/prepare_data.py
 ```
 
-On host-2:
+This reads `KDDTrain+.txt` from the data directory and writes `node1/KDDTrain+.txt`, `node2/KDDTrain+.txt`, and `node3/KDDTrain+.txt`, each with a different normal/attack ratio as described above.
 
-```bash
-scp host-1:workspace/nsl-kdd-intrusion-detection/cert/ca/capath/ca-1-cert.pem \
-workspace/nsl-kdd-intrusion-detection/cert/ca/capath
+5. Copy the Swarm Learning wheel file into the build context and build the Docker image for ML, containing the environment used to run Swarm training of the user model.
+
+```
+cp -L lib/swarmlearning-client-py3-none-manylinux_2_24_x86_64.whl workspace/nsl-kdd-binary/ml-context/
+docker build -t nsl-kdd-binary-env workspace/nsl-kdd-binary/ml-context
 ```
 
-### 5. Build the ML Docker Image
+You may need to specify the correct `https_proxy` for the Docker build if you are behind a firewall. For example:
 
-Copy the Swarm Learning wheel file:
-
-```bash
-cp -L lib/swarmlearning-client-py3-none-manylinux_2_24_x86_64.whl \
-workspace/nsl-kdd-intrusion-detection/ml-context/
+```
+docker build -t nsl-kdd-binary-env --build-arg https_proxy=http://<your-proxy-server-ip>:<port> workspace/nsl-kdd-binary/ml-context
 ```
 
-Build the Docker image:
+6. Run the Swarm Network node (sentinel node).
 
-```bash
-docker build -t nsl-kdd-ml-env \
-workspace/nsl-kdd-intrusion-detection/ml-context
+```
+./scripts/bin/run-sn -d --rm --name=sn1 --host-ip=10.160.0.2 \
+--sentinel --sn-api-port=30304 --key=workspace/nsl-kdd-binary/cert/sn-1-key.pem \
+--cert=workspace/nsl-kdd-binary/cert/sn-1-cert.pem \
+--capath=workspace/nsl-kdd-binary/cert/ca/capath --apls-ip=10.160.0.2
 ```
 
-### 6. Launch Sentinel Node
+Use the Docker logs command to monitor this sentinel SN node and wait for the node to finish initializing. The sentinel node is ready when this message appears in the log output:
 
-On host-1:
-
-```bash
-./scripts/bin/run-sn -d \
---name=sn1 \
---host-ip=172.1.1.1 \
---sentinel \
---sn-api-port=30304 \
---key=workspace/nsl-kdd-intrusion-detection/cert/sn-1-key.pem \
---cert=workspace/nsl-kdd-intrusion-detection/cert/sn-1-cert.pem \
---capath=workspace/nsl-kdd-intrusion-detection/cert/ca/capath \
---apls-ip=172.1.1.1
 ```
-
-The Sentinel node is ready when the following message appears:
-
-```text
 swarm.blCnt : INFO : Starting SWARM-API-SERVER on port: 30304
 ```
 
-### 7. Launch Swarm Learning Nodes
+7. Run Swarm Learning node 1 and Machine Learning node 1 (as a side-car). Set the proxy server as appropriate.
 
-Example command:
-
-```bash
-./scripts/bin/run-sl \
---name=sl1 \
---host-ip=172.1.1.1 \
---sn-ip=172.1.1.1 \
---sn-api-port=30304 \
---sl-fs-port=16000 \
---key=workspace/nsl-kdd-intrusion-detection/cert/sl-1-key.pem \
---cert=workspace/nsl-kdd-intrusion-detection/cert/sl-1-cert.pem \
---capath=workspace/nsl-kdd-intrusion-detection/cert/ca/capath \
---ml-it \
---ml-image=nsl-kdd-ml-env \
---ml-name=ml1 \
---ml-w=/tmp/test \
---ml-entrypoint=python3 \
---ml-cmd=model/train_stage1.py \
---ml-v=workspace/nsl-kdd-intrusion-detection/model:/tmp/test/model \
---ml-v=workspace/nsl-kdd-intrusion-detection/data-prep:/tmp/test/data-prep \
---ml-e DATA_DIR=data-prep \
---ml-e MODEL_DIR=model \
---ml-e MAX_EPOCHS=50 \
---ml-e MIN_PEERS=5 \
---apls-ip=172.1.1.1
+```
+./scripts/bin/run-sl --name=sl1 --host-ip=10.160.0.2 \
+--sn-ip=10.160.0.2 --sn-api-port=30304 --sl-fs-port=16000 \
+--key=workspace/nsl-kdd-binary/cert/sl-1-key.pem \
+--cert=workspace/nsl-kdd-binary/cert/sl-1-cert.pem \
+--capath=workspace/nsl-kdd-binary/cert/ca/capath \
+--volume=workspace/nsl-kdd-binary/hpe-swarm-sl1:/tmp/hpe-swarm \
+--ml-image=nsl-kdd-binary-env --ml-name=ml1 \
+--ml-w=/tmp/nsl-kdd --ml-entrypoint=python3 --ml-cmd=model/train_binary.py \
+--ml-v=workspace/nsl-kdd-binary/model:/tmp/nsl-kdd/model \
+--ml-v=workspace/nsl-kdd-binary/saved_models/node1:/tmp/nsl-kdd/model_out \
+--ml-v=workspace/nsl-kdd-binary/data/node1:/tmp/nsl-kdd/data \
+--ml-e DATA_DIR=/tmp/nsl-kdd/data --ml-e MODEL_DIR=/tmp/nsl-kdd/model_out \
+--ml-e MAX_EPOCHS=50 --ml-e MIN_PEERS=3 \
+--ml-e https_proxy=http://<your-proxy-server-ip>:<port-number> \
+--apls-ip=10.160.0.2
 ```
 
-Repeat for all participating nodes.
+8. Run Swarm Learning node 2 and Machine Learning node 2 (as a side-car). Set the proxy server as appropriate.
 
-### 8. Monitor Training
+```
+./scripts/bin/run-sl --name=sl2 --host-ip=10.160.0.2 \
+--sn-ip=10.160.0.2 --sn-api-port=30304 --sl-fs-port=17000 \
+--key=workspace/nsl-kdd-binary/cert/sl-2-key.pem \
+--cert=workspace/nsl-kdd-binary/cert/sl-2-cert.pem \
+--capath=workspace/nsl-kdd-binary/cert/ca/capath \
+--volume=workspace/nsl-kdd-binary/hpe-swarm-sl2:/tmp/hpe-swarm \
+--ml-image=nsl-kdd-binary-env --ml-name=ml2 \
+--ml-w=/tmp/nsl-kdd --ml-entrypoint=python3 --ml-cmd=model/train_binary.py \
+--ml-v=workspace/nsl-kdd-binary/model:/tmp/nsl-kdd/model \
+--ml-v=workspace/nsl-kdd-binary/saved_models/node2:/tmp/nsl-kdd/model_out \
+--ml-v=workspace/nsl-kdd-binary/data/node2:/tmp/nsl-kdd/data \
+--ml-e DATA_DIR=/tmp/nsl-kdd/data --ml-e MODEL_DIR=/tmp/nsl-kdd/model_out \
+--ml-e MAX_EPOCHS=50 --ml-e MIN_PEERS=3 \
+--ml-e https_proxy=http://<your-proxy-server-ip>:<port-number> \
+--apls-ip=10.160.0.2
+```
 
-Monitor ML containers using:
+9. Run Swarm Learning node 3 and Machine Learning node 3 (as a side-car). Set the proxy server as appropriate.
 
-```bash
+```
+./scripts/bin/run-sl --name=sl3 --host-ip=10.160.0.2 \
+--sn-ip=10.160.0.2 --sn-api-port=30304 --sl-fs-port=18000 \
+--key=workspace/nsl-kdd-binary/cert/sl-3-key.pem \
+--cert=workspace/nsl-kdd-binary/cert/sl-3-cert.pem \
+--capath=workspace/nsl-kdd-binary/cert/ca/capath \
+--volume=workspace/nsl-kdd-binary/hpe-swarm-sl3:/tmp/hpe-swarm \
+--ml-image=nsl-kdd-binary-env --ml-name=ml3 \
+--ml-w=/tmp/nsl-kdd --ml-entrypoint=python3 --ml-cmd=model/train_binary.py \
+--ml-v=workspace/nsl-kdd-binary/model:/tmp/nsl-kdd/model \
+--ml-v=workspace/nsl-kdd-binary/saved_models/node3:/tmp/nsl-kdd/model_out \
+--ml-v=workspace/nsl-kdd-binary/data/node3:/tmp/nsl-kdd/data \
+--ml-e DATA_DIR=/tmp/nsl-kdd/data --ml-e MODEL_DIR=/tmp/nsl-kdd/model_out \
+--ml-e MAX_EPOCHS=50 --ml-e MIN_PEERS=3 \
+--ml-e https_proxy=http://<your-proxy-server-ip>:<port-number> \
+--apls-ip=10.160.0.2
+```
+
+10. Three nodes of Swarm training are now started. Monitor the Docker logs of the ML nodes (`ml1`, `ml2`, `ml3` containers) for Swarm training progress:
+
+```
 docker logs -f ml1
+docker logs -f ml2
+docker logs -f ml3
 ```
 
-Training completes successfully when the following message appears:
+Training ends with each node logging its final epoch and cluster distribution, for example:
 
-```text
-SwarmCallback : INFO : Saved the trained model - model/final_model.keras
+```
+Ep  50/50 | Loss:0.2506 | NMI:0.3461
 ```
 
-### 9. Run the Two-Stage Inference Pipeline
+Each node's final Swarm model, encoder, preprocessing pipeline, and cluster map are saved inside that node's own model directory — `workspace/nsl-kdd-binary/saved_models/node{1,2,3}/`. SL and ML nodes exit but are not removed after Swarm training completes.
 
-After training:
+> Rather than running steps 6–9 by hand each time, the included `workspace/nsl-kdd-binary/run.sh` script automates the full sequence above — cleanup, SN startup, launching all 3 SL/ML pairs, and live log monitoring — and can be run with:
+>
+> ```
+> MAX_EPOCHS=50 bash workspace/nsl-kdd-binary/run.sh
+> ```
 
-```bash
-python3 model/two_stage_pipeline.py
+## Evaluating the trained model
+
+To evaluate a node's trained model against the held-out `KDDTest+.txt` set:
+
+```
+docker run --rm \
+  -v $(pwd)/workspace/nsl-kdd-binary/saved_models/node1:/tmp/nsl-kdd/model \
+  -v $(pwd)/workspace/nsl-kdd-binary/data:/tmp/nsl-kdd/data \
+  -e DATA_DIR=/tmp/nsl-kdd/data \
+  -e MODEL_DIR=/tmp/nsl-kdd/model \
+  nsl-kdd-binary-env \
+  python3 /tmp/nsl-kdd/model/evaluate_binary.py
 ```
 
-The pipeline:
+This reports overall accuracy along with accuracy broken out separately for the `normal` and `attack` classes.
 
-1. Detects Normal vs Attack traffic
-2. Classifies detected attacks into DoS, Probe, U2R, or R2L
+## Cleaning up
 
-### 10. Cleanup
+To clean up, run the `scripts/bin/stop-swarm` script to stop and remove the container nodes of the previous run. If required, back up the container logs and delete the workspace directory.
 
-On all hosts:
-
-```bash
+```
 ./scripts/bin/stop-swarm
 ```
-
-This stops and removes all Sentinel, Swarm Learning, and ML containers.
-
