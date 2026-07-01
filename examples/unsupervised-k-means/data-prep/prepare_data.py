@@ -1,3 +1,35 @@
+############################################################################
+## (C)Copyright 2021-2026 Hewlett Packard Enterprise Development LP
+## Licensed under the Apache License, Version 2.0 (the "License"); you may
+## not use this file except in compliance with the License. You may obtain
+## a copy of the License at
+##
+##    http://www.apache.org/licenses/LICENSE-2.0
+##
+## Unless required by applicable law or agreed to in writing, software
+## distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+## WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+## License for the specific language governing permissions and limitations
+## under the License.
+############################################################################
+
+
+# ---------------
+# Prepares the NSL-KDD dataset for 3-node Swarm Learning training by splitting
+# the full KDDTrain+.txt into 3 deliberately non-IID (non-identically distributed)
+# partitions — one per Swarm node. Non-IID splits simulate realistic federated
+# learning conditions where each participant's local data has a meaningfully
+# different class distribution, rather than each node holding a random,
+# representative sample of the same overall population.
+#
+# Data distribution strategy:
+#   Node 1 — Normal-dominant  : 65% normal / 35% attack  (13,000 + 7,000 rows)
+#   Node 2 — Attack-dominant  : 65% attack / 35% normal  (13,000 + 7,000 rows)
+#   Node 3 — Balanced         : 50% normal / 50% attack  (10,000 + 10,000 rows)
+#
+# This tests whether Swarm Learning's weight-averaging can produce a robust
+# global model even when individual nodes have strongly skewed local views
+# of the data — without any node ever sharing its raw network logs.
 import os
 import pandas as pd
 
