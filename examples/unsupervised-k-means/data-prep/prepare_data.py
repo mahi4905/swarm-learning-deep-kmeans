@@ -35,6 +35,8 @@ import pandas as pd
 
 DATA_DIR = os.getenv("DATA_DIR", "/platform/swarmml/data")
 
+# NSL-KDD column schema — the raw .txt files have no header row, so column
+# names must be supplied manually. 41 network-traffic features + label + difficulty
 COL_NAMES = [
     "duration", "protocol_type", "service", "flag", "src_bytes", "dst_bytes",
     "land", "wrong_fragment", "urgent", "hot", "num_failed_logins", "logged_in",
