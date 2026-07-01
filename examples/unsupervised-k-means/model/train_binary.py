@@ -1,3 +1,54 @@
+############################################################################
+## (C)Copyright 2021-2026 Hewlett Packard Enterprise Development LP
+## Licensed under the Apache License, Version 2.0 (the "License"); you may
+## not use this file except in compliance with the License. You may obtain
+## a copy of the License at
+##
+##    http://www.apache.org/licenses/LICENSE-2.0
+##
+## Unless required by applicable law or agreed to in writing, software
+## distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+## WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+## License for the specific language governing permissions and limitations
+## under the License.
+############################################################################
+
+##################################################################
+# NSL-KDD Binary Intrusion Detection using Deep Embedded
+# Clustering (DEC) with HPE Swarm Learning.
+#
+# This example demonstrates unsupervised binary classification
+# (normal vs attack) on the NSL-KDD network intrusion dataset
+# using a Deep Autoencoder combined with a K-Means clustering
+# head, trained collaboratively across 3 Swarm nodes without
+# any node sharing its raw network traffic data.
+#
+# Model Architecture:
+#   - Encoder : Dense(128) -> BN -> ReLU -> Dropout(0.2)
+#               -> Dense(64) -> BN -> ReLU -> Dense(32, linear)
+#   - Decoder : Dense(64) -> Dense(128) -> Dense(input_dim)
+#   - Clustering head: ClusteringLayer implementing Student's
+#     t-distribution soft assignment (K=10 clusters).
+#
+# Training pipeline:
+#   Phase 1 - Autoencoder pretraining (MSE reconstruction loss)
+#   Phase 2 - Deep K-Means via joint KLD + MSE optimization,
+#             Swarm-synchronized via SwarmCallback
+#
+# Swarm Learning integration note:
+#   SwarmCallback must wrap a SINGLE continuous model.fit() call.
+#   Calling fit() multiple times re-triggers on_train_end() each
+#   time, signaling the SL container that training is complete
+#   prematurely and causing a broken-pipe error on the next sync.
+#   The periodic target-distribution refresh required by DEC is
+#   handled inside DeepKMeansCallback using a tf.data.Dataset
+#   generator, allowing P to update each epoch within one fit().
+#
+# Reference:
+#   Xie, J., Girshick, R., & Farhadi, A. (2016).
+#   "Unsupervised Deep Embedding for Clustering Analysis."
+#   ICML 2016. https://arxiv.org/abs/1511.06335
+##################################################################
 import os, logging, pickle
 import numpy as np, pandas as pd
 from sklearn.preprocessing import StandardScaler, LabelEncoder, OneHotEncoder
