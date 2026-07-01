@@ -1,3 +1,24 @@
+############################################################################
+## (C)Copyright 2021-2026 Hewlett Packard Enterprise Development LP
+## Licensed under the Apache License, Version 2.0 (the "License"); you may
+## not use this file except in compliance with the License. You may obtain
+## a copy of the License at
+##
+##    http://www.apache.org/licenses/LICENSE-2.0
+##
+## Unless required by applicable law or agreed to in writing, software
+## distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+## WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+## License for the specific language governing permissions and limitations
+## under the License.
+############################################################################
+
+# evaluate_binary.py
+# ------------------
+# Evaluates a trained Swarm node's model against the held-out KDDTest+.txt set.
+# Loads the fitted preprocessor and final_model.keras saved by train_binary.py,
+# maps each of the 10 unsupervised clusters to its majority true label
+# (normal/attack), and reports overall accuracy plus per-class breakdown.
 import os, pickle
 import numpy as np, pandas as pd
 from sklearn.preprocessing import LabelEncoder
@@ -8,7 +29,7 @@ from tensorflow import keras
 from tensorflow.keras import layers
 
 data_dir  = os.getenv('DATA_DIR',  '/tmp/nsl-kdd/data')
-model_dir = os.getenv('MODEL_DIR', '/tmp/nsl-kdd/model')
+model_dir = os.getenv('MODEL_DIR', '/tmp/nsl-kdd/model') #loading model
 
 col_names = [
     'duration','protocol_type','service','flag','src_bytes','dst_bytes',
@@ -90,7 +111,7 @@ normal_mask=true_labels=='normal'
 attack_mask=true_labels=='attack'
 normal_acc=(final_preds[normal_mask]=='normal').mean()
 attack_acc=(final_preds[attack_mask]=='attack').mean()
-
+#logging the outuput with nmi
 print(f'\n{"="*65}')
 print(f'BINARY CLASSIFICATION RESULTS')
 print(f'{"="*65}')
